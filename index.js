@@ -23,7 +23,7 @@ function runYtDlp(args) {
       "yt-dlp",
       [
         "--cookies",
-        "/cookies/youtube.txt",
+        "/cookies/youtube-cookies.txt",
         "--user-agent",
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64)",
         ...args,
