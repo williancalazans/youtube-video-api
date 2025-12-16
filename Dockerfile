@@ -13,5 +13,8 @@ RUN npm install
 
 COPY . .
 
+# Garantir que o diretório de cookies existe
+RUN mkdir -p /app/cookies
+
 EXPOSE 8080
 CMD ["node", "index.js"]

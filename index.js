@@ -49,28 +49,42 @@ const requestOptions = {
 
 app.use(cors());
 
+// Caminho absoluto para cookies
+const cookiesPath = path.join(__dirname, "cookies", "youtube-cookies.txt");
+const cookiesExists = fs.existsSync(cookiesPath);
+
+if (!cookiesExists) {
+  log("WARN", `Arquivo de cookies não encontrado em ${cookiesPath}`);
+}
+
 function runYtDlp(args) {
   return new Promise((resolve, reject) => {
     log("DEBUG", `Executando yt-dlp com argumentos: ${args.join(" ")}`);
-    execFile(
-      "yt-dlp",
-      [
-        "--cookies",
-        "./cookies/youtube-cookies.txt",
-        "--user-agent",
-        "Mozilla/5.0 (Windows NT 10.0; Win64; x64)",
-        ...args,
-      ],
-      { timeout: 15000 },
-      (err, stdout, stderr) => {
-        if (err) {
-          log("ERROR", "Erro ao executar yt-dlp", err);
-          return reject(stderr || err);
-        }
-        log("DEBUG", "yt-dlp executado com sucesso");
-        resolve(stdout.trim());
+    
+    const ytdlpArgs = [
+      "--user-agent",
+      "Mozilla/5.0 (Windows NT 10.0; Win64; x64)",
+    ];
+
+    // Adicionar cookies apenas se o arquivo existe
+    if (cookiesExists) {
+      ytdlpArgs.push("--cookies", cookiesPath);
+    }
+
+    // Adicionar suporte a JavaScript runtime
+    ytdlpArgs.push("--js-runtimes", "python");
+
+    ytdlpArgs.push(...args);
+
+    execFile("yt-dlp", ytdlpArgs, { timeout: 30000 }, (err, stdout, stderr) => {
+      if (err) {
+        log("ERROR", "Erro ao executar yt-dlp", err);
+        log("ERROR", `stderr: ${stderr}`);
+        return reject(stderr || err);
       }
-    );
+      log("DEBUG", "yt-dlp executado com sucesso");
+      resolve(stdout.trim());
+    });
   });
 }
 /**
