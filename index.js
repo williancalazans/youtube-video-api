@@ -19,13 +19,23 @@ app.use(cors());
 
 function runYtDlp(args) {
   return new Promise((resolve, reject) => {
-    execFile("yt-dlp", args, { timeout: 8000 }, (err, stdout) => {
-      if (err) return reject(err);
-      resolve(stdout.trim());
-    });
+    execFile(
+      "yt-dlp",
+      [
+        "--cookies",
+        "/cookies/youtube.txt",
+        "--user-agent",
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64)",
+        ...args,
+      ],
+      { timeout: 15000 },
+      (err, stdout, stderr) => {
+        if (err) return reject(stderr || err);
+        resolve(stdout.trim());
+      }
+    );
   });
 }
-
 /**
  * 🎵 AUDIO
  */
