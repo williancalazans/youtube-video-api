@@ -21,7 +21,7 @@ function log(level, message, error = null) {
   if (error) {
     logMessage += `\n${error.stack || error}`;
   }
-  
+
   console.log(logMessage);
   fs.appendFileSync(logFile, logMessage + "\n");
 }
@@ -59,34 +59,33 @@ if (!cookiesExists) {
 
 function runYtDlp(args) {
   return new Promise((resolve, reject) => {
-    log("DEBUG", `Executando yt-dlp com argumentos: ${args.join(" ")}`);
-    
     const ytdlpArgs = [
       "--user-agent",
       "Mozilla/5.0 (Windows NT 10.0; Win64; x64)",
+      "--js-runtimes",
+      "node",
     ];
 
-    // Adicionar cookies apenas se o arquivo existe
     if (cookiesExists) {
       ytdlpArgs.push("--cookies", cookiesPath);
     }
 
-    // Adicionar suporte a JavaScript runtime
-    ytdlpArgs.push("--js-runtimes", "python");
+    // 🔥 PROXY RESIDENCIAL
+    if (process.env.YTDLP_PROXY) {
+      ytdlpArgs.push("--proxy", process.env.YTDLP_PROXY);
+    }
 
     ytdlpArgs.push(...args);
 
     execFile("yt-dlp", ytdlpArgs, { timeout: 30000 }, (err, stdout, stderr) => {
       if (err) {
-        log("ERROR", "Erro ao executar yt-dlp", err);
-        log("ERROR", `stderr: ${stderr}`);
-        return reject(stderr || err);
+        return reject(new Error(stderr));
       }
-      log("DEBUG", "yt-dlp executado com sucesso");
       resolve(stdout.trim());
     });
   });
 }
+
 /**
  * 🎵 AUDIO
  */
@@ -94,14 +93,14 @@ app.get("/audio", async (req, res) => {
   try {
     const { url } = req.query;
     log("INFO", `Requisição de audio recebida - URL: ${url}`);
-    
+
     if (!url) {
       log("WARN", "URL não fornecida na requisição de audio");
       return res.status(400).json({ error: "URL obrigatória" });
     }
-    
+
     var link = null;
-    
+
     if (url.includes("youtube")) {
       log("DEBUG", "Detectado URL do YouTube para audio");
       link = await runYtDlp([
@@ -137,7 +136,7 @@ app.get("/video", async (req, res) => {
   try {
     const { url } = req.query;
     log("INFO", `Requisição de video recebida - URL: ${url}`);
-    
+
     if (!url) {
       log("WARN", "URL não fornecida na requisição de video");
       return res.status(400).json({ error: "URL obrigatória" });
