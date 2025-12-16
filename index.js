@@ -7,6 +7,14 @@ const path = require("path");
 const app = express();
 const PORT = process.env.PORT || 8080;
 
+// Middleware para parsing de JSON e cookies
+app.use(express.json());
+app.use(cors({
+  origin: true,
+  credentials: true,
+  allowedHeaders: ["Content-Type", "Cookie"],
+}));
+
 // 📝 Configuração de logs
 const logsDir = path.join(__dirname, "logs");
 if (!fs.existsSync(logsDir)) {
@@ -36,7 +44,6 @@ app.use((req, res, next) => {
   next();
 });
 
-app.use(cors());
 log("INFO", "🚀 Servidor iniciado");
 
 const requestOptions = {
@@ -47,8 +54,6 @@ const requestOptions = {
   },
 };
 
-app.use(cors());
-
 // Caminho absoluto para cookies
 const cookiesPath = path.join(__dirname, "cookies", "youtube-cookies.txt");
 const cookiesExists = fs.existsSync(cookiesPath);
@@ -57,7 +62,30 @@ if (!cookiesExists) {
   log("WARN", `Arquivo de cookies não encontrado em ${cookiesPath}`);
 }
 
-function runYtDlp(args) {
+// Converter cookies simples para formato Netscape que yt-dlp entende
+function convertToNetscapeFormat(cookieString) {
+  if (!cookieString) return null;
+  
+  const cookies = cookieString.split('; ');
+  const netscapeContent = [
+    '# Netscape HTTP Cookie File',
+    '# http://curl.haxx.se/rfc/cookie_spec.html',
+    '# This is a generated file!  Do not edit.',
+    ''
+  ];
+
+  cookies.forEach(cookie => {
+    const [name, value] = cookie.split('=');
+    if (name && value) {
+      // Formato: domain, flag, path, secure, expiration, name, value
+      netscapeContent.push(`.youtube.com\tTRUE\t/\tTRUE\t9999999999\t${name}\t${value}`);
+    }
+  });
+
+  return netscapeContent.join('\n');
+}
+
+function runYtDlp(args, clientCookies = null) {
   return new Promise((resolve, reject) => {
     const ytdlpArgs = [
       "--user-agent",
@@ -66,8 +94,28 @@ function runYtDlp(args) {
       "node",
     ];
 
-    if (cookiesExists) {
+    // Se o cliente enviou cookies, usar eles
+    if (clientCookies) {
+      const cookieFile = path.join(__dirname, `temp-cookies-${Date.now()}.txt`);
+      const netscapeFormat = convertToNetscapeFormat(clientCookies);
+      
+      if (netscapeFormat) {
+        fs.writeFileSync(cookieFile, netscapeFormat);
+        ytdlpArgs.push("--cookies", cookieFile);
+        log("DEBUG", "Usando cookies do cliente (convertidos para formato Netscape)");
+      } else {
+        log("WARN", "Não foi possível converter cookies do cliente");
+      }
+      
+      // Limpar arquivo temporário após execução
+      setTimeout(() => {
+        fs.unlink(cookieFile, () => {});
+      }, 5000);
+    }
+    // Caso contrário, usar cookies internos se existirem
+    else if (cookiesExists) {
       ytdlpArgs.push("--cookies", cookiesPath);
+      log("DEBUG", "Usando cookies internos do servidor");
     }
 
     // 🔥 PROXY RESIDENCIAL
@@ -89,10 +137,11 @@ function runYtDlp(args) {
 /**
  * 🎵 AUDIO
  */
-app.get("/audio", async (req, res) => {
+app.post("/audio", async (req, res) => {
   try {
-    const { url } = req.query;
-    log("INFO", `Requisição de audio recebida - URL: ${url}`);
+    const { url, cookies } = req.body;
+    const clientCookies = cookies || req.headers.cookie;
+    log("INFO", `Requisição de audio recebida - URL: ${url} - Cookies do cliente: ${!!clientCookies}`);
 
     if (!url) {
       log("WARN", "URL não fornecida na requisição de audio");
@@ -108,10 +157,10 @@ app.get("/audio", async (req, res) => {
         "bestaudio",
         "-g",
         url,
-      ]);
+      ], clientCookies);
     } else {
       log("DEBUG", "Processando URL não-YouTube para audio");
-      link = await runYtDlp([url]);
+      link = await runYtDlp([url], clientCookies);
     }
 
     log("INFO", "Link de audio gerado com sucesso");
@@ -132,10 +181,11 @@ app.get("/audio", async (req, res) => {
 /**
  * 🎥 VIDEO 1080p
  */
-app.get("/video", async (req, res) => {
+app.post("/video", async (req, res) => {
   try {
-    const { url } = req.query;
-    log("INFO", `Requisição de video recebida - URL: ${url}`);
+    const { url, cookies } = req.body;
+    const clientCookies = cookies || req.headers.cookie;
+    log("INFO", `Requisição de video recebida - URL: ${url} - Cookies do cliente: ${!!clientCookies}`);
 
     if (!url) {
       log("WARN", "URL não fornecida na requisição de video");
@@ -151,10 +201,10 @@ app.get("/video", async (req, res) => {
         "bestvideo[height<=1080]",
         "-g",
         url,
-      ]);
+      ], clientCookies);
     } else {
       log("DEBUG", "Processando URL não-YouTube para video");
-      link = await runYtDlp([url])
+      link = await runYtDlp([url], clientCookies);
     }
 
     log("INFO", "Link de video 1080p gerado com sucesso");
